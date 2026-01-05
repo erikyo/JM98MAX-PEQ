@@ -1,0 +1,236 @@
+:root {
+	--bg-color: #121212;
+	--panel-color: #1e1e1e;
+	--accent-color: #00e676;
+	--disabled-color: #444;
+	--text-color: #e0e0e0;
+	--border-color: #333;
+}
+
+body {
+	font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+	background-color: var(--bg-color);
+	color: var(--text-color);
+	margin: 0;
+	padding: 20px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	min-height: 100vh;
+}
+
+h1 {
+	color: var(--accent-color);
+	margin-bottom: 5px;
+	text-transform: uppercase;
+	letter-spacing: 2px;
+}
+p.subtitle {
+	color: #888;
+	font-size: 0.9em;
+	margin-bottom: 20px;
+}
+
+/* --- Top Bar --- */
+.top-bar {
+	display: flex;
+	gap: 15px;
+	width: 100%;
+	max-width: 1100px;
+	background: var(--panel-color);
+	padding: 15px;
+	border-radius: 8px;
+	align-items: center;
+	justify-content: space-between;
+	margin-bottom: 20px;
+	border: 1px solid var(--border-color);
+	flex-wrap: wrap;
+}
+
+.status-badge {
+	padding: 5px 10px;
+	border-radius: 4px;
+	font-weight: bold;
+	font-size: 0.85rem;
+	background: #333;
+	color: #777;
+}
+.status-badge.connected {
+	background: rgba(0, 230, 118, 0.2);
+	color: var(--accent-color);
+}
+
+/* --- EQ Grid --- */
+.eq-container {
+	display: grid;
+	grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+	gap: 8px;
+	width: 100%;
+	max-width: 1100px;
+	margin-bottom: 20px;
+}
+
+/* --- EQ Strip Styling --- */
+.eq-strip {
+	background: var(--panel-color);
+	border: 1px solid var(--border-color);
+	border-radius: 8px;
+	padding: 10px 5px;
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 8px;
+	transition: opacity 0.3s;
+}
+
+/* Visual style when band is OFF */
+.eq-strip.bypassed {
+	opacity: 0.5;
+	border-color: #222;
+}
+.eq-strip.bypassed input[type="range"],
+.eq-strip.bypassed input[type="number"],
+.eq-strip.bypassed select {
+	filter: grayscale(100%);
+	cursor: not-allowed;
+}
+
+.eq-strip h3 {
+	margin: 0;
+	font-size: 0.8rem;
+	color: #888;
+	text-transform: uppercase;
+}
+.freq-label {
+	font-size: 0.7rem;
+	color: var(--accent-color);
+	margin-bottom: 5px;
+}
+
+/* --- Controls --- */
+input[type="range"][orient="vertical"] {
+	writing-mode: bt-lr;
+	-webkit-appearance: slider-vertical;
+	width: 8px;
+	height: 140px;
+	padding: 0 10px;
+	cursor: pointer;
+}
+
+input[type="number"],
+select {
+	width: 90%;
+	background: #2c2c2c;
+	border: 1px solid #444;
+	color: white;
+	padding: 4px;
+	border-radius: 4px;
+	font-size: 0.75rem;
+	text-align: center;
+}
+
+label {
+	font-size: 0.65rem;
+	color: #aaa;
+	align-self: flex-start;
+	margin-left: 5px;
+}
+
+/* --- Toggle Switch (On/Off) --- */
+.switch {
+	position: relative;
+	display: inline-block;
+	width: 40px;
+	height: 20px;
+}
+.switch input {
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+.slider {
+	position: absolute;
+	cursor: pointer;
+	top: 0;
+	left: 0;
+	right: 0;
+	bottom: 0;
+	background-color: #444;
+	transition: 0.4s;
+	border-radius: 20px;
+}
+.slider:before {
+	position: absolute;
+	content: "";
+	height: 14px;
+	width: 14px;
+	left: 3px;
+	bottom: 3px;
+	background-color: white;
+	transition: 0.4s;
+	border-radius: 50%;
+}
+input:checked + .slider {
+	background-color: var(--accent-color);
+}
+input:checked + .slider:before {
+	transform: translateX(20px);
+}
+
+/* --- Buttons --- */
+.btn-group {
+	display: flex;
+	gap: 10px;
+}
+
+button {
+	padding: 8px 16px;
+	border: none;
+	border-radius: 4px;
+	font-weight: 600;
+	cursor: pointer;
+	transition: 0.2s;
+	background: #333;
+	color: white;
+	font-size: 0.8rem;
+}
+button:hover {
+	background: #444;
+}
+button:disabled {
+	opacity: 0.5;
+	cursor: not-allowed;
+}
+
+button.primary {
+	background: var(--accent-color);
+	color: #000;
+}
+button.primary:hover {
+	background: #00c853;
+}
+
+button.action {
+	background: #2979ff;
+	color: white;
+}
+button.reset {
+	background: #d32f2f;
+	color: white;
+}
+
+/* --- Log --- */
+.log-console {
+	width: 100%;
+	max-width: 1100px;
+	height: 80px;
+	background: #000;
+	border: 1px solid var(--border-color);
+	color: #666;
+	font-family: "Courier New", monospace;
+	font-size: 0.7rem;
+	padding: 10px;
+	overflow-y: auto;
+	box-sizing: border-box;
+	margin-top: 10px;
+}

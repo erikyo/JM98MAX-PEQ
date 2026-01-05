@@ -1,0 +1,20 @@
+{
+	"name": "jm98max_peq",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc && vite build",
+		"format": "npx @biomejs/biome check --write",
+		"preview": "vite preview"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "2.3.11",
+		"typescript": "~5.9.3",
+		"vite": "^7.2.4"
+	},
+	"dependencies": {
+		"@types/w3c-web-hid": "^1.0.6"
+	}
+}

@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>JM98MAX PEQ</title>
+  </head>
+  <body>
+    <div id="app"></div>
+    <h1>JM98MAX PEQ Controller</h1>
+    <p class="subtitle">Control your JM98MAX Parametric EQ</p>
+
+    <div class="top-bar">
+      <div style="display:flex; align-items:center; gap:10px;">
+        <button id="btnConnect" class="primary">CONNECT</button>
+        <span id="statusBadge" class="status-badge">OFFLINE</span>
+        <span id="fwVersion" style="font-size: 0.8rem; color: #666;"></span>
+      </div>
+
+      <div style="display:flex; align-items:center; gap:10px;">
+        <div style="text-align: right;">
+          <label>Pre-Amp</label>
+          <div id="globalGainDisplay" style="font-weight:bold; color:var(--accent-color)">0 dB</div>
+        </div>
+        <input type="range" id="globalGainSlider" min="-20" max="10" step="1" value="0" style="width: 100px;" disabled>
+      </div>
+
+      <div class="btn-group">
+        <button id="btnReset" class="reset" disabled>RESET DEFAULTS</button>
+        <button id="btnImport">Import</button>
+        <button id="btnExport" disabled>Export</button>
+        <input type="file" id="fileInput" accept=".json" style="display: none;">
+      </div>
+    </div>
+
+    <div id="eqContainer" class="eq-container">
+    </div>
+
+    <div class="top-bar" style="justify-content: flex-end;">
+      <button id="btnSync" class="action" disabled>SYNC TO RAM (APPLY)</button>
+      <button id="btnFlash" class="action" style="background: #e65100;" disabled>SAVE TO FLASH (PERMANENT)</button>
+    </div>
+
+    <div id="logConsole" class="log-console">Ready to connect...</div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
