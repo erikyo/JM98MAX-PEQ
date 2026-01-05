@@ -17,6 +17,7 @@ export function initState() {
     renderUI(eqState);
 }
 
+// Questa funzione ora aggiorna sia lo stato che la UI
 export function setGlobalGain(gain: number) {
     globalGainState = gain;
     updateGlobalGainUI(gain);
@@ -35,6 +36,7 @@ export function setEqState(eq: EQ) {
 }
 
 export function setEQ(index: number, key: keyof Band, value: number | boolean | string) {
+    // @ts-ignore - Dynamic key assignment
     eqState[index][key] = value;
 }
 
@@ -50,32 +52,28 @@ export function setGlobalGainState(gainState: number) {
  * DEFAULT EQ STATE
  */
 export function defaultEqState(): EQ {
-    // Create an initial state based on default frequencies
     return DEFAULT_FREQS.map((freq, i) => ({
         index: i,
         freq: freq,
         gain: 0,
-        q: 0.75,
+        q: 0.75, // Default Q
         type: "PK",
         enabled: true,
     })) as EQ;
 }
-
 /**
  * Render UI
- * @param eqState The EQ state to render
  */
 export function renderUI(eqState: EQ) {
     const container: HTMLElement | null = document.getElementById("eqContainer");
     if (!container) {
-        alert("Sorry something went wrong!");
+        console.error("EQ Container not found!");
         return;
     }
     container.innerHTML = "";
 
     eqState.forEach((band, i) => {
         const div = document.createElement("div");
-        // Add a 'bypassed' class if disabled for visual graying out
         div.className = `eq-strip ${band.enabled ? "" : "bypassed"}`;
         div.innerHTML = `
                 <h3>BAND ${i + 1}</h3>
@@ -132,9 +130,7 @@ export async function connectToDevice() {
             statusBadge.classList.add("connected");
         }
         const btnConnect = document.getElementById("btnConnect");
-        if (btnConnect) {
-            btnConnect.style.display = "none";
-        }
+        if (btnConnect) btnConnect.style.display = "none";
 
         enableControls(true);
         setupListener(device);
@@ -148,25 +144,20 @@ export async function connectToDevice() {
  * Reset to factory defaults
  */
 export async function resetToDefaults() {
-    if (
-        !confirm(
-            "Reset all bands to Defaults (0dB, Q=1.0) and optimal frequencies?",
-        )
-    )
-        return;
+    if (!confirm("Reset all bands to Defaults (0dB, Q=1.0) and optimal frequencies?")) return;
 
     log("Resetting to factory defaults...");
 
-    // Reset State object
-    const eqState = defaultEqState();
+    // FIX: Rimosso 'const', ora aggiorna la variabile globale del modulo!
+    eqState = defaultEqState();
 
-    globalGainState = 0;
-    updateGlobalGainUI(0);
+    // Reset Global Gain State
+    setGlobalGain(0);
 
-    // Re-render
+    // Re-render UI
     renderUI(eqState);
 
-    // Auto-sync to device
+    // Auto-sync to device using the updated state
     await syncToDevice();
     log("Defaults applied and synced.");
 }
@@ -186,16 +177,13 @@ export function updateState(index: number, key: string, value: string | number |
         value = parseFloat(value as string);
     else if (key === "enabled")
         value = Boolean(value);
-    else
-        value = value.toString();
+
     setEQ(index, key as keyof Band, value);
 
     // Sync Slider <-> Number Input
     if (key === "gain") {
         // Set the current Gain Slider
-        const currentRange: HTMLInputElement | null = document.querySelector(
-            `.eq-strip:nth-child(${index + 1}) input[type=range]`,
-        );
+        const currentRange: HTMLInputElement | null = document.querySelector(`.eq-strip:nth-child(${index + 1}) input[type=range]`);
         if (currentRange) currentRange.value = value.toString();
         // Set the current Gain Number Input
         const currentGain: HTMLInputElement | null = document.querySelector(`#num-gain-${index}`);
@@ -216,7 +204,7 @@ export function toggleBand(index: number, isEnabled: boolean) {
     if (isEnabled) {
         strip?.classList.remove("bypassed");
     } else {
-        strip?.classList.add("bypassed")
+        strip?.classList.add("bypassed");
     }
 
     log(`Band ${index + 1} ${isEnabled ? "Enabled" : "Bypassed"}`);

@@ -1,7 +1,7 @@
-import type {EQ} from "./main.ts";
-import {defaultEqState, getDevice, renderUI} from "./fn.ts";
-import {sendPacket} from "./dsp.ts";
-import {CMD} from "./constants.ts";
+import { CMD } from "./constants.ts";
+import { sendPacket } from "./dsp.ts";
+import { getDevice, setGlobalGainState } from "./fn.ts";
+import type { EQ } from "./main.ts";
 
 const c = document.getElementById("logConsole") as HTMLElement;
 
@@ -11,31 +11,43 @@ const c = document.getElementById("logConsole") as HTMLElement;
  * @param i The band index
  */
 export function refreshStripUI(eqState: EQ, i: number) {
-    // Only updates values, does not re-create DOM (prevents focus loss)
-    const band = eqState[i];
-    (document.querySelector(`#num-gain-${i}`) as HTMLInputElement)!.value = band.gain.toString();
-    (document.querySelector(
-        `.eq-strip:nth-child(${i + 1}) input[type=range]`,
-    ) as HTMLInputElement).value = band.gain.toString();
-    (document.querySelector(`#num-freq-${i}`) as HTMLInputElement).value = band.freq.toString();
-    (document.querySelector(`#num-q-${i}`) as HTMLInputElement).value = band.q.toString();
-    (document.querySelector(`#sel-type-${i}`) as HTMLSelectElement).value = band.type;
+	// Only updates values, does not re-create DOM (prevents focus loss)
+	const band = eqState[i];
+	const gainInput = document.querySelector(
+		`#num-gain-${i}`,
+	) as HTMLInputElement;
+	const rangeInput = document.querySelector(
+		`.eq-strip:nth-child(${i + 1}) input[type=range]`,
+	) as HTMLInputElement;
+	const freqInput = document.querySelector(
+		`#num-freq-${i}`,
+	) as HTMLInputElement;
+	const qInput = document.querySelector(`#num-q-${i}`) as HTMLInputElement;
+	const typeSelect = document.querySelector(
+		`#sel-type-${i}`,
+	) as HTMLSelectElement;
+	const checkInput = document.querySelector(
+		`.eq-strip:nth-child(${i + 1}) input[type=checkbox]`,
+	) as HTMLInputElement;
 
-    // Checkbox update
-    (document.querySelector(
-        `.eq-strip:nth-child(${i + 1}) input[type=checkbox]`,
-    ) as HTMLInputElement).checked = band.enabled;
+	if (gainInput) gainInput.value = band.gain.toString();
+	if (rangeInput) rangeInput.value = band.gain.toString();
+	if (freqInput) freqInput.value = band.freq.toString();
+	if (qInput) qInput.value = band.q.toString();
+	if (typeSelect) typeSelect.value = band.type;
+	if (checkInput) checkInput.checked = band.enabled;
 }
 
-/**
- * Update global gain UI
- * @param val The new global gain value
- */
 export function updateGlobalGainUI(val: number) {
-    const globalGainSlider = document.getElementById("globalGainSlider") as HTMLInputElement;
-    globalGainSlider!.value = val.toString();
-    const globalGainDisplay = document.getElementById("globalGainDisplay") as HTMLInputElement;
-    globalGainDisplay!.innerText = `${val} dB`;
+	const globalGainSlider = document.getElementById(
+		"globalGainSlider",
+	) as HTMLInputElement;
+	if (globalGainSlider) globalGainSlider.value = val.toString();
+
+	const globalGainDisplay = document.getElementById(
+		"globalGainDisplay",
+	) as HTMLElement;
+	if (globalGainDisplay) globalGainDisplay.innerText = `${val} dB`;
 }
 
 /**
@@ -43,10 +55,16 @@ export function updateGlobalGainUI(val: number) {
  * @param newGlobalGainState The new global gain value
  */
 export async function updateGlobalGain(newGlobalGainState: number) {
-    const device = getDevice();
-    updateGlobalGainUI(newGlobalGainState);
-    if (device)
-        await sendPacket(device, [CMD.WRITE, CMD.GAIN, 0x02, 0x00, newGlobalGainState]);
+	const device = getDevice();
+	updateGlobalGainUI(newGlobalGainState);
+	if (device)
+		await sendPacket(device, [
+			CMD.WRITE,
+			CMD.GAIN,
+			0x02,
+			0x00,
+			newGlobalGainState,
+		]);
 }
 
 /**
@@ -54,10 +72,12 @@ export async function updateGlobalGain(newGlobalGainState: number) {
  * @param e The event object
  */
 export async function setGlobalGain(e: Event) {
-    const globalGainEl = e.target as HTMLInputElement;
+	const globalGainEl = e.target as HTMLInputElement;
+	const newGlobalGainState = Number(globalGainEl.value);
 
-    const newGlobalGainState = Number(globalGainEl.value);
-    await updateGlobalGain(newGlobalGainState);
+	setGlobalGainState(newGlobalGainState);
+
+	await updateGlobalGain(newGlobalGainState);
 }
 
 /**
@@ -65,12 +85,10 @@ export async function setGlobalGain(e: Event) {
  * @param enabled
  */
 export function enableControls(enabled: boolean) {
-    const els: NodeListOf<HTMLInputElement | HTMLSelectElement | HTMLButtonElement> = document.querySelectorAll(
-        "input, select, button.action, button.reset, button#btnExport",
-    );
-    for (const el of els) el.disabled = !enabled;
-    // Re-render to update disabled attributes in template
-    renderUI(defaultEqState());
+	const els = document.querySelectorAll(
+		"input, select, button.action, button.reset, button#btnExport",
+	);
+	els.forEach((el: any) => (el.disabled = !enabled));
 }
 
 /**
@@ -79,8 +97,9 @@ export function enableControls(enabled: boolean) {
  * @param msg
  */
 export function log(msg: string) {
-    c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
-    c.scrollTop = c.scrollHeight;
+	if (!c) return;
+	c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
+	c.scrollTop = c.scrollHeight;
 }
 
 /**

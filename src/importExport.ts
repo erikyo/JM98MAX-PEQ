@@ -1,4 +1,4 @@
-import {getDevice, getEqState, getGlobalGainState, renderUI} from "./fn.ts";
+import {getDevice, getEqState, getGlobalGainState, renderUI, setEqState, setGlobalGainState} from "./fn.ts";
 import {log, updateGlobalGain} from "./helpers.ts";
 
 /**
@@ -38,10 +38,16 @@ export async function importProfile(e: Event) {
         try {
             const data = JSON.parse(event.target?.result as string);
             if (data.bands) {
-                const eqState = data.bands;
+                // Update internal state
+                setEqState(data.bands);
+
                 const globalGain = data.globalGain || 0;
-                updateGlobalGain(globalGain);
-                renderUI(eqState); // Re-render to update switches and disabled states
+                // Update global gain state
+                setGlobalGainState(globalGain);
+
+                updateGlobalGain(globalGain); // Update UI and send gain packet
+                renderUI(data.bands); // Update EQ UI
+
                 log("Profile imported. Click 'SYNC' to apply.");
             }
         } catch (err) {
