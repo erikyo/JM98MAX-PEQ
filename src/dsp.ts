@@ -1,7 +1,7 @@
 import {CMD, DEFAULT_FREQS, NUM_BANDS, PACKET_SIZE, REPORT_ID} from "./constants.ts";
 import {getDevice, getEqState, getGlobalGainState, setGlobalGain} from "./fn.ts";
 import {delay, log, refreshStripUI} from "./helpers.ts";
-import type {Band, EQ} from "./main.ts";
+import type {Band} from "./main.ts";
 
 /**
  * CORE FUNCTIONS: READ/WRITE
