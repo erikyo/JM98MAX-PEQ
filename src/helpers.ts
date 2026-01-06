@@ -1,6 +1,9 @@
 import { setDeviceGlobalGain } from "./dsp.ts";
 import type { EQ } from "./main.ts";
 
+/**
+ * Console element
+ */
 const c = document.getElementById("logConsole") as HTMLElement;
 
 /**
@@ -36,6 +39,10 @@ export function refreshStripUI(eqState: EQ, i: number) {
 	if (checkInput) checkInput.checked = band.enabled;
 }
 
+/**
+ * Update global gain UI
+ * @param val The new global gain value
+ */
 export function updateGlobalGainUI(val: number) {
 	const globalGainSlider = document.getElementById(
 		"globalGainSlider",
@@ -52,14 +59,15 @@ export function updateGlobalGainUI(val: number) {
  * Update global gain and send to device
  * @param newGlobalGainState The new global gain value
  */
-/**
- * Update global gain and send to device using Protocol Dispatcher
- */
 export async function updateGlobalGain(newGlobalGainState: number) {
 	updateGlobalGainUI(newGlobalGainState);
 	await setDeviceGlobalGain(newGlobalGainState);
 }
 
+/**
+ * Set global gain and send to device
+ * @param e The event object
+ */
 export async function setGlobalGain(e: Event) {
 	const globalGainEl = e.target as HTMLInputElement;
 	// We import setGlobalGainState from fn.ts to update state,
@@ -74,6 +82,10 @@ export async function setGlobalGain(e: Event) {
 	await updateGlobalGain(newGlobalGainState);
 }
 
+/**
+ * Enable/Disable controls
+ * @param enabled
+ */
 export function enableControls(enabled: boolean) {
 	const els = document.querySelectorAll(
 		"input, select, button.action, button.reset, button#btnExport",
@@ -84,10 +96,19 @@ export function enableControls(enabled: boolean) {
 	}
 }
 
+/**
+ * Log message to the app console
+ *
+ * @param msg
+ */
 export function log(msg: string) {
 	if (!c) return;
 	c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
 	c.scrollTop = c.scrollHeight;
 }
 
+/**
+ * Delay for a specified number of milliseconds
+ * @param ms | Number of milliseconds to delay
+ */
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
