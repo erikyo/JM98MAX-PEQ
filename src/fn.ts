@@ -114,30 +114,45 @@ export function renderUI(eqState: EQ) {
  * Connect to device
  */
 export async function connectToDevice() {
-    try {
-        const devices = await navigator.hid.requestDevice({
-            filters: [{ vendorId: 0x661 }],
-        });
-        if (devices.length === 0) return;
+	try {
+		// Updated filters to support more Savitech devices (Fosi, etc.)
+		// and allow Comtrue devices (Moondrop/Tanchjim) to at least attempt connection
+		const devices = await navigator.hid.requestDevice({
+			filters: [
+				{ vendorId: 0x661 }, // JCally / Generic Savitech
+				{ vendorId: 0x262a }, // Savitech Official (Fosi, iBasso, Fiio KA series)
+				{ vendorId: 0x2fc6 }, // Comtrue CT7601 (Moondrop, Tanchjim - Protocol might differ!)
+			],
+		});
 
-        device = devices[0];
-        await device.open();
+		if (devices.length === 0) return;
 
-        log("Connected.");
-        const statusBadge = document.getElementById("statusBadge");
-        if (statusBadge) {
-            statusBadge.innerText = "ONLINE";
-            statusBadge.classList.add("connected");
-        }
-        const btnConnect = document.getElementById("btnConnect");
-        if (btnConnect) btnConnect.style.display = "none";
+		device = devices[0];
+		await device.open();
 
-        enableControls(true);
-        setupListener(device);
-        await readDeviceParams(device);
-    } catch (err) {
-        log(`Error: ${(err as Error).message}`);
-    }
+		log(
+			`Connected to: ${device.productName} (VID: 0x${device.vendorId.toString(16).toUpperCase()})`,
+		);
+
+		const statusBadge = document.getElementById("statusBadge");
+		if (statusBadge) {
+			statusBadge.innerText = "ONLINE";
+			statusBadge.classList.add("connected");
+		}
+		const btnConnect = document.getElementById("btnConnect");
+		if (btnConnect) {
+			btnConnect.style.display = "none";
+		}
+
+		enableControls(true);
+		setupListener(device);
+
+		// Comtrue devices usually don't reply to Savitech commands,
+		// so this might timeout on Tanchjim/Moondrop, but it works for Fosi.
+		await readDeviceParams(device);
+	} catch (err) {
+		log(`Error: ${(err as Error).message}`);
+	}
 }
 
 /**
