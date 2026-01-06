@@ -54,6 +54,10 @@ export async function setDeviceGlobalGain(gain: number) {
 	}
 }
 
+/**
+ * Read device parameters
+ * @param device The device to read from
+ */
 export async function readDeviceParams(device: HIDDevice) {
 	if (!device) return;
 	log("Reading device configuration...");
@@ -88,6 +92,10 @@ export async function readDeviceParams(device: HIDDevice) {
 	log("Configuration loaded.");
 }
 
+/**
+ * Setup listener for device events
+ * @param device The device to listen to
+ */
 export function setupListener(device: HIDDevice) {
 	const eqState = getEqState();
 	device.addEventListener("inputreport", (event) => {
@@ -133,6 +141,10 @@ export function setupListener(device: HIDDevice) {
 }
 
 // --- MAIN SYNC FUNCTION ---
+
+/**
+ * Sync EQ state to device
+ */
 export async function syncToDevice() {
 	const device = getDevice();
 	const eqState = getEqState();
@@ -167,6 +179,9 @@ export async function syncToDevice() {
 	log("Sync Complete.");
 }
 
+/**
+ * Save EQ state to permanent memory
+ */
 export async function flashToFlash() {
 	const device = getDevice();
 	if (!device) return;
@@ -229,6 +244,12 @@ export async function writeBand(
 // --------------------------------------------------------------------------
 // STRATEGY: SAVITECH (Walkplay)
 // --------------------------------------------------------------------------
+/**
+ * Write a band to a Savitech device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
 async function writeBandSavitech(device: HIDDevice, band: Band, gain: number) {
 	const bArr = computeIIRFilter(band.freq, gain, band.q);
 	const typeMap = { PK: 2, LSQ: 1, HSQ: 3 };
@@ -260,6 +281,12 @@ async function writeBandSavitech(device: HIDDevice, band: Band, gain: number) {
 // --------------------------------------------------------------------------
 // STRATEGY: MOONDROP (Comtrue/KTMicro)
 // --------------------------------------------------------------------------
+/**
+ * Write a band to a Moondrop device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
 async function writeBandMoondrop(device: HIDDevice, band: Band, gain: number) {
 	const coeffs = encodeBiquadMoondrop(band.freq, gain, band.q);
 	const typeMap = { PK: 2, LSQ: 1, HSQ: 3 };
@@ -300,6 +327,11 @@ async function writeBandMoondrop(device: HIDDevice, band: Band, gain: number) {
 	await device.sendReport(REPORT_ID_DEFAULT, enablePacket);
 }
 
+/**
+ * Set global gain for Moondrop devices
+ * @param device The device to send the packet to
+ * @param gain The gain to set
+ */
 async function setGlobalGainMoondrop(device: HIDDevice, gain: number) {
 	const val = Math.round(gain * 256);
 	const packet = new Uint8Array([
@@ -315,6 +347,12 @@ async function setGlobalGainMoondrop(device: HIDDevice, gain: number) {
 // --------------------------------------------------------------------------
 // STRATEGY: FIIO
 // --------------------------------------------------------------------------
+/**
+ * Write a band to a Fiio device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
 async function writeBandFiio(device: HIDDevice, band: Band, gain: number) {
 	// FiiO does NOT use Biquads. It takes raw params.
 	const typeMap = { PK: 0, LSQ: 1, HSQ: 2 }; // Note: Mapping might differ from Savitech
@@ -357,6 +395,11 @@ async function writeBandFiio(device: HIDDevice, band: Band, gain: number) {
 	await device.sendReport(REPORT_ID_FIIO, packet);
 }
 
+/**
+ * Set global gain for Fiio devices
+ * @param device The device to send the packet to
+ * @param gain The gain to set
+ */
 async function setGlobalGainFiio(device: HIDDevice, gain: number) {
 	const val = Math.round(gain * 10);
 	const gLow = val & 0xff;
@@ -381,6 +424,11 @@ async function setGlobalGainFiio(device: HIDDevice, gain: number) {
 // --------------------------------------------------------------------------
 // HELPER FUNCTIONS
 // --------------------------------------------------------------------------
+/**
+ * Send a packet to a Savitech device
+ * @param device The device to send the packet to
+ * @param bytes The bytes to send
+ */
 async function sendPacketSavitech(device: HIDDevice, bytes: number[]) {
 	try {
 		const p = new Uint8Array(PACKET_SIZE);
@@ -391,11 +439,22 @@ async function sendPacketSavitech(device: HIDDevice, bytes: number[]) {
 	}
 }
 
+/**
+ * Convert a number to an array of bytes
+ * @param n The number to convert
+ * @param c The number of bytes to convert to
+ */
 function toBytes(n: number, c: number) {
 	return [...Array(c)].map((_, i) => (n >> (8 * i)) & 0xff);
 }
 
 // --- MATH: SAVITECH ---
+/**
+ * Compute IIR filter coefficients
+ * @param freq Frequency in Hz
+ * @param gain Gain in dB
+ * @param q Q factor
+ */
 function computeIIRFilter(freq: number, gain: number, q: number) {
 	const fs = 96000;
 	const A = 10 ** (gain / 20);
@@ -404,7 +463,14 @@ function computeIIRFilter(freq: number, gain: number, q: number) {
 	const d4 = alpha * Math.sqrt(A);
 	const d5 = alpha / Math.sqrt(A);
 	const inv_a0 = 1 / (d5 + 1);
+    /**
+     * @var s Scale factor for Q30
+     */
 	const s = 1073741824;
+    /**
+     * Convert a number to a Q30 value
+     * @param n Number to convert
+     */
 	const q30 = (n: number) => Math.round(n * s);
 
 	return [
@@ -422,6 +488,12 @@ function computeIIRFilter(freq: number, gain: number, q: number) {
 }
 
 // --- MATH: MOONDROP (COMTRUE) ---
+/**
+ * Encode a biquad filter for Moondrop devices
+ * @param freq Frequency in Hz
+ * @param gain Gain in dB
+ * @param q Q factor
+ */
 function encodeBiquadMoondrop(freq: number, gain: number, q: number) {
 	const A = 10 ** (gain / 40);
 	const w0 = (2 * Math.PI * freq) / 96000;
@@ -438,6 +510,10 @@ function encodeBiquadMoondrop(freq: number, gain: number, q: number) {
 	return [b0, b1, b2, a1, -a2].map((c) => Math.round(c * 1073741824));
 }
 
+/**
+ * Convert an array of coefficients to a byte array
+ * @param coeffs Array of coefficients
+ */
 function encodeToByteArray(coeffs: number[]) {
 	const arr = new Uint8Array(20);
 	for (let i = 0; i < coeffs.length; i++) {
