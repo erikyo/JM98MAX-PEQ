@@ -1,9 +1,14 @@
 import {
-	CMD,
+	CMD_FIIO,
+	CMD_MOON,
+	CMD_SAVI,
 	DEFAULT_FREQS,
 	NUM_BANDS,
 	PACKET_SIZE,
-	REPORT_ID,
+	REPORT_ID_DEFAULT,
+	REPORT_ID_FIIO,
+	VID_COMTRUE,
+	VID_FIIO,
 } from "./constants.ts";
 import {
 	getDevice,
@@ -15,27 +20,82 @@ import { delay, log, refreshStripUI } from "./helpers.ts";
 import type { Band } from "./main.ts";
 
 /**
- * CORE FUNCTIONS: READ/WRITE
+ * DETECT PROTOCOL BASED ON VENDOR ID
+ */
+function getProtocol(device: HIDDevice) {
+	if (device.vendorId === VID_COMTRUE) return "MOONDROP";
+	if (device.vendorId === VID_FIIO) return "FIIO";
+	return "SAVITECH"; // Default
+}
+
+/**
+ * UNIVERSAL GLOBAL GAIN SETTER
+ * Called by helpers.ts to update volume
+ */
+export async function setDeviceGlobalGain(gain: number) {
+	const device = getDevice();
+	if (!device) return;
+
+	const protocol = getProtocol(device);
+
+	if (protocol === "FIIO") {
+		await setGlobalGainFiio(device, gain);
+	} else if (protocol === "MOONDROP") {
+		await setGlobalGainMoondrop(device, gain);
+	} else {
+		// Savitech Default
+		await sendPacketSavitech(device, [
+			CMD_SAVI.WRITE,
+			CMD_SAVI.GAIN,
+			0x02,
+			0x00,
+			gain,
+		]);
+	}
+}
+
+/**
+ * Read device parameters
+ * @param device The device to read from
  */
 export async function readDeviceParams(device: HIDDevice) {
 	if (!device) return;
 	log("Reading device configuration...");
 
 	// Read Version
-	await sendPacket(device, [CMD.READ, CMD.VERSION, CMD.END]);
+	await sendPacketSavitech(device, [
+		CMD_SAVI.READ,
+		CMD_SAVI.VERSION,
+		CMD_SAVI.END,
+	]);
 	await delay(50);
 	// Read Gain
-	await sendPacket(device, [CMD.READ, CMD.GAIN, CMD.END]);
+	await sendPacketSavitech(device, [
+		CMD_SAVI.READ,
+		CMD_SAVI.GAIN,
+		CMD_SAVI.END,
+	]);
 	await delay(50);
 
 	// Request all bands
 	for (let i = 0; i < NUM_BANDS; i++) {
-		await sendPacket(device, [CMD.READ, CMD.PEQ, 0x00, 0x00, i, CMD.END]);
+		await sendPacketSavitech(device, [
+			CMD_SAVI.READ,
+			CMD_SAVI.PEQ,
+			0x00,
+			0x00,
+			i,
+			CMD_SAVI.END,
+		]);
 		await delay(40);
 	}
 	log("Configuration loaded.");
 }
 
+/**
+ * Setup listener for device events
+ * @param device The device to listen to
+ */
 export function setupListener(device: HIDDevice) {
 	const eqState = getEqState();
 	device.addEventListener("inputreport", (event) => {
@@ -43,17 +103,17 @@ export function setupListener(device: HIDDevice) {
 		const data = new Uint8Array(event.data.buffer);
 		const cmd = data[1];
 
-		if (cmd === CMD.VERSION) {
+		if (cmd === CMD_SAVI.VERSION) {
 			let ver = "";
 			for (let i = 3; i < 10; i++) {
 				if (data[i] === 0) break;
 				ver += String.fromCharCode(data[i]);
 			}
 			versionEl!.innerText = `FW: ${ver}`;
-		} else if (cmd === CMD.GAIN) {
+		} else if (cmd === CMD_SAVI.GAIN) {
 			const gain = new Int8Array([data[4]])[0];
 			setGlobalGain(gain);
-		} else if (cmd === CMD.PEQ && data.byteLength >= 34) {
+		} else if (cmd === CMD_SAVI.PEQ && data.byteLength >= 34) {
 			const idx = data[4];
 			if (idx < NUM_BANDS) {
 				const view = new DataView(data.buffer);
@@ -80,69 +140,127 @@ export function setupListener(device: HIDDevice) {
 	});
 }
 
+// --- MAIN SYNC FUNCTION ---
+
+/**
+ * Sync EQ state to device
+ */
 export async function syncToDevice() {
 	const device = getDevice();
 	const eqState = getEqState();
 	if (!device || !eqState) return;
 
-	log("Syncing to RAM...");
+	const protocol = getProtocol(device);
+	log(`Syncing via protocol: ${protocol}...`);
 
-	// Write Global Gain
-	await sendPacket(device, [
-		CMD.WRITE,
-		CMD.GAIN,
-		0x02,
-		0x00,
-		getGlobalGainState(),
-	]);
+	// 1. Write Global Gain (Reuse the function above)
+	await setDeviceGlobalGain(getGlobalGainState());
 
-	// Write Bands
+	// 2. Write Bands
 	for (const band of eqState) {
-		await writeBand(device, band);
+		await writeBand(device, band, protocol);
 		await delay(30);
 	}
 
-	// Commit
-	await sendPacket(device, [
-		CMD.WRITE,
-		CMD.TEMP,
-		0x04,
-		0x00,
-		0x00,
-		0xff,
-		0xff,
-		CMD.END,
-	]);
+	// 3. Commit / Temp Save
+	if (protocol === "SAVITECH") {
+		await sendPacketSavitech(device, [
+			CMD_SAVI.WRITE,
+			CMD_SAVI.TEMP,
+			0x04,
+			0x00,
+			0x00,
+			0xff,
+			0xff,
+			CMD_SAVI.END,
+		]);
+	}
+
 	log("Sync Complete.");
 }
 
+/**
+ * Save EQ state to permanent memory
+ */
 export async function flashToFlash() {
 	const device = getDevice();
 	if (!device) return;
 	if (!confirm("Save to permanent memory?")) return;
-	await sendPacket(device, [CMD.WRITE, CMD.FLASH, 0x01, 0x00, CMD.END]);
+
+	const protocol = getProtocol(device);
+
+	if (protocol === "FIIO") {
+		// FiiO Save: AA 0A ... 19 ...
+		const packet = new Uint8Array(64);
+		packet.set([
+			CMD_FIIO.HEADER_SET_1,
+			CMD_FIIO.HEADER_SET_2,
+			0,
+			0,
+			CMD_FIIO.SAVE,
+			1,
+			1,
+			0,
+			CMD_FIIO.END,
+		]);
+		await device.sendReport(REPORT_ID_FIIO, packet);
+	} else if (protocol === "MOONDROP") {
+		// Moondrop Save: Cmd 1, SubCmd 1
+		const packet = new Uint8Array([CMD_MOON.WRITE, CMD_MOON.SAVE_FLASH]);
+		await device.sendReport(REPORT_ID_DEFAULT, packet);
+	} else {
+		// Savitech Save
+		await sendPacketSavitech(device, [
+			CMD_SAVI.WRITE,
+			CMD_SAVI.FLASH,
+			0x01,
+			0x00,
+			CMD_SAVI.END,
+		]);
+	}
+
 	log("Saved to Flash.");
 }
 
-export async function writeBand(device: HIDDevice, band: Band) {
-	if (!device) return;
-
-	// LOGIC FOR BYPASS:
-	// If band is enabled, use real gain.
-	// If band is disabled/bypassed, force Gain to 0 for DSP calculation,
-	// but DO NOT change the 'band.gain' state property (so UI keeps value).
+/**
+ * DISPATCHER FOR WRITING BANDS
+ */
+export async function writeBand(
+	device: HIDDevice,
+	band: Band,
+	protocol: string,
+) {
 	const effectiveGain = band.enabled ? band.gain : 0;
 
-	const bArr = computeIIRFilter(band.freq, effectiveGain, band.q);
+	if (protocol === "FIIO") {
+		await writeBandFiio(device, band, effectiveGain);
+	} else if (protocol === "MOONDROP") {
+		await writeBandMoondrop(device, band, effectiveGain);
+	} else {
+		await writeBandSavitech(device, band, effectiveGain);
+	}
+}
 
+// --------------------------------------------------------------------------
+// STRATEGY: SAVITECH (Walkplay)
+// --------------------------------------------------------------------------
+/**
+ * Write a band to a Savitech device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
+async function writeBandSavitech(device: HIDDevice, band: Band, gain: number) {
+	const bArr = computeIIRFilter(band.freq, gain, band.q);
 	const typeMap = { PK: 2, LSQ: 1, HSQ: 3 };
+
 	const freqBytes = toBytes(band.freq, 2);
 	const qBytes = toBytes(Math.round(band.q * 256), 2);
-	const gainBytes = toBytes(Math.round(effectiveGain * 256), 2);
+	const gainBytes = toBytes(Math.round(gain * 256), 2);
 
 	const packet = [
-		CMD.WRITE,
-		CMD.PEQ,
+		CMD_SAVI.WRITE,
+		CMD_SAVI.PEQ,
 		0x18,
 		0x00,
 		band.index,
@@ -155,22 +273,167 @@ export async function writeBand(device: HIDDevice, band: Band) {
 		typeMap[band.type as keyof typeof typeMap],
 		0x00,
 		0x00,
-		CMD.END,
+		CMD_SAVI.END,
 	];
-	await sendPacket(device, packet);
+	await sendPacketSavitech(device, packet);
+}
+
+// --------------------------------------------------------------------------
+// STRATEGY: MOONDROP (Comtrue/KTMicro)
+// --------------------------------------------------------------------------
+/**
+ * Write a band to a Moondrop device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
+async function writeBandMoondrop(device: HIDDevice, band: Band, gain: number) {
+	const coeffs = encodeBiquadMoondrop(band.freq, gain, band.q);
+	const typeMap = { PK: 2, LSQ: 1, HSQ: 3 };
+
+	const packet = new Uint8Array(63);
+	packet[0] = CMD_MOON.WRITE;
+	packet[1] = CMD_MOON.UPDATE_EQ;
+	packet[2] = 0x18;
+	packet[3] = 0x00;
+	packet[4] = band.index;
+
+	const coeffBytes = encodeToByteArray(coeffs);
+	packet.set(coeffBytes, 7);
+
+	packet[27] = band.freq & 0xff;
+	packet[28] = (band.freq >> 8) & 0xff;
+
+	const qVal = Math.round(band.q * 256);
+	packet[29] = qVal & 255;
+	packet[30] = (qVal >> 8) & 255;
+
+	const gainVal = Math.round(gain * 256);
+	packet[31] = gainVal & 255;
+	packet[32] = (gainVal >> 8) & 255;
+
+	packet[33] = typeMap[band.type as keyof typeof typeMap];
+	packet[35] = REPORT_ID_DEFAULT;
+
+	await device.sendReport(REPORT_ID_DEFAULT, packet);
+
+	const enablePacket = new Uint8Array(63);
+	enablePacket[0] = CMD_MOON.WRITE;
+	enablePacket[1] = CMD_MOON.UPDATE_EQ_COEFF;
+	enablePacket[2] = band.index;
+	enablePacket[4] = 255;
+	enablePacket[5] = 255;
+	enablePacket[6] = 255;
+	await device.sendReport(REPORT_ID_DEFAULT, enablePacket);
 }
 
 /**
- * Send a packet to the device
- * @param device HIDDevice
- * @param bytes Array of bytes
+ * Set global gain for Moondrop devices
+ * @param device The device to send the packet to
+ * @param gain The gain to set
  */
-export async function sendPacket(device: HIDDevice, bytes: number[]) {
-	if (!device) return;
+async function setGlobalGainMoondrop(device: HIDDevice, gain: number) {
+	const val = Math.round(gain * 256);
+	const packet = new Uint8Array([
+		CMD_MOON.WRITE,
+		CMD_MOON.PRE_GAIN,
+		0,
+		val & 255,
+		(val >> 8) & 255,
+	]);
+	await device.sendReport(REPORT_ID_DEFAULT, packet);
+}
+
+// --------------------------------------------------------------------------
+// STRATEGY: FIIO
+// --------------------------------------------------------------------------
+/**
+ * Write a band to a Fiio device
+ * @param device The device to send the packet to
+ * @param band The band to write
+ * @param gain The gain to set
+ */
+async function writeBandFiio(device: HIDDevice, band: Band, gain: number) {
+	// FiiO does NOT use Biquads. It takes raw params.
+	const typeMap = { PK: 0, LSQ: 1, HSQ: 2 }; // Note: Mapping might differ from Savitech
+
+	const freqLow = band.freq & 0xff;
+	const freqHigh = (band.freq >> 8) & 0xff;
+
+	// Gain mapping (Fiio specific)
+	let t = gain * 10;
+	if (t < 0) t = (Math.abs(t) ^ 65535) + 1;
+	const gainLow = (t >> 8) & 0xff; // Fiio swaps high/low vs standard? Logic copied from fiioUsbHandler.js
+	const gainHigh = t & 0xff;
+
+	const qVal = Math.round(band.q * 100); // FiiO uses *100, not *256
+	const qLow = (qVal >> 8) & 0xff;
+	const qHigh = qVal & 0xff;
+
+	// Packet: AA 0A 00 00 15 08 [Idx] [GainH] [GainL] [FreqL] [FreqH] [QL] [QH] [Type] 00 EE
+	const packet = new Uint8Array([
+		CMD_FIIO.HEADER_SET_1,
+		CMD_FIIO.HEADER_SET_2,
+		0,
+		0,
+		CMD_FIIO.FILTER_PARAMS,
+		8,
+		band.index,
+		gainLow,
+		gainHigh, // Note: Provided file had logic fiioGainBytesFromValue returns [High, Low] or [Low, High]?
+		// Looking at fiioUsbHidHandler.js: "gainLow, gainHigh" in array.
+		// But function returns [r, n] where r is shifted >> 8. So r is High byte.
+		freqLow,
+		freqHigh,
+		qLow,
+		qHigh,
+		typeMap[band.type as keyof typeof typeMap],
+		0,
+		CMD_FIIO.END,
+	]);
+
+	await device.sendReport(REPORT_ID_FIIO, packet);
+}
+
+/**
+ * Set global gain for Fiio devices
+ * @param device The device to send the packet to
+ * @param gain The gain to set
+ */
+async function setGlobalGainFiio(device: HIDDevice, gain: number) {
+	const val = Math.round(gain * 10);
+	const gLow = val & 0xff;
+	const gHigh = (val >> 8) & 0xff;
+
+	// Packet from file: AA 0A ... 17 02 [High] [Low] 00 EE
+	const packet = new Uint8Array([
+		CMD_FIIO.HEADER_SET_1,
+		CMD_FIIO.HEADER_SET_2,
+		0,
+		0,
+		CMD_FIIO.GLOBAL_GAIN,
+		2,
+		gHigh,
+		gLow,
+		0,
+		CMD_FIIO.END,
+	]);
+	await device.sendReport(REPORT_ID_FIIO, packet);
+}
+
+// --------------------------------------------------------------------------
+// HELPER FUNCTIONS
+// --------------------------------------------------------------------------
+/**
+ * Send a packet to a Savitech device
+ * @param device The device to send the packet to
+ * @param bytes The bytes to send
+ */
+async function sendPacketSavitech(device: HIDDevice, bytes: number[]) {
 	try {
 		const p = new Uint8Array(PACKET_SIZE);
 		for (let i = 0; i < bytes.length; i++) p[i] = bytes[i];
-		await device.sendReport(REPORT_ID, p);
+		await device.sendReport(REPORT_ID_DEFAULT, p);
 	} catch (err) {
 		log(`TX Error: ${(err as Error).message}`);
 	}
@@ -178,45 +441,38 @@ export async function sendPacket(device: HIDDevice, bytes: number[]) {
 
 /**
  * Convert a number to an array of bytes
- * @param n |umber to convert
- * @param c Number of bytes
+ * @param n The number to convert
+ * @param c The number of bytes to convert to
  */
-export function toBytes(n: number, c: number) {
+function toBytes(n: number, c: number) {
 	return [...Array(c)].map((_, i) => (n >> (8 * i)) & 0xff);
 }
 
-/**
- * DSP Math
- */
-
-/**
- * @var s Scale factor for Q30
- */
-const s = 1073741824;
-
-/**
- * Convert a number to a Q30 value
- * @param n Number to convert
- */
-const q30 = (n: number) => Math.round(n * s);
-
+// --- MATH: SAVITECH ---
 /**
  * Compute IIR filter coefficients
  * @param freq Frequency in Hz
  * @param gain Gain in dB
  * @param q Q factor
  */
-export function computeIIRFilter(freq: number, gain: number, q: number) {
+function computeIIRFilter(freq: number, gain: number, q: number) {
 	const fs = 96000;
 	const A = 10 ** (gain / 20);
 	const w0 = (freq * 2 * Math.PI) / fs;
 	const alpha = Math.sin(w0) / (2 * q);
-	const sqrtA = Math.sqrt(A);
-	const d4 = alpha * sqrtA;
-	const d5 = alpha / sqrtA;
+	const d4 = alpha * Math.sqrt(A);
+	const d5 = alpha / Math.sqrt(A);
 	const inv_a0 = 1 / (d5 + 1);
+    /**
+     * @var s Scale factor for Q30
+     */
+	const s = 1073741824;
+    /**
+     * Convert a number to a Q30 value
+     * @param n Number to convert
+     */
+	const q30 = (n: number) => Math.round(n * s);
 
-	// Coeffs: b0, b1, b2, -a1, -a2
 	return [
 		q30((1 + d4) * inv_a0),
 		q30(-2 * Math.cos(w0) * inv_a0),
@@ -229,4 +485,43 @@ export function computeIIRFilter(freq: number, gain: number, q: number) {
 		(v >> 16) & 0xff,
 		(v >> 24) & 0xff,
 	]);
+}
+
+// --- MATH: MOONDROP (COMTRUE) ---
+/**
+ * Encode a biquad filter for Moondrop devices
+ * @param freq Frequency in Hz
+ * @param gain Gain in dB
+ * @param q Q factor
+ */
+function encodeBiquadMoondrop(freq: number, gain: number, q: number) {
+	const A = 10 ** (gain / 40);
+	const w0 = (2 * Math.PI * freq) / 96000;
+	const alpha = Math.sin(w0) / (2 * q);
+	const cosW0 = Math.cos(w0);
+	const norm = 1 + alpha / A;
+
+	const b0 = (1 + alpha * A) / norm;
+	const b1 = (-2 * cosW0) / norm;
+	const b2 = (1 - alpha * A) / norm;
+	const a1 = -b1; // Logic flips a1
+	const a2 = (1 - alpha / A) / norm;
+
+	return [b0, b1, b2, a1, -a2].map((c) => Math.round(c * 1073741824));
+}
+
+/**
+ * Convert an array of coefficients to a byte array
+ * @param coeffs Array of coefficients
+ */
+function encodeToByteArray(coeffs: number[]) {
+	const arr = new Uint8Array(20);
+	for (let i = 0; i < coeffs.length; i++) {
+		const val = coeffs[i];
+		arr[i * 4] = val & 0xff;
+		arr[i * 4 + 1] = (val >> 8) & 0xff;
+		arr[i * 4 + 2] = (val >> 16) & 0xff;
+		arr[i * 4 + 3] = (val >> 24) & 0xff;
+	}
+	return arr;
 }

@@ -1,8 +1,9 @@
-import { CMD } from "./constants.ts";
-import { sendPacket } from "./dsp.ts";
-import { getDevice, setGlobalGainState } from "./fn.ts";
+import { setDeviceGlobalGain } from "./dsp.ts";
 import type { EQ } from "./main.ts";
 
+/**
+ * Console element
+ */
 const c = document.getElementById("logConsole") as HTMLElement;
 
 /**
@@ -38,6 +39,10 @@ export function refreshStripUI(eqState: EQ, i: number) {
 	if (checkInput) checkInput.checked = band.enabled;
 }
 
+/**
+ * Update global gain UI
+ * @param val The new global gain value
+ */
 export function updateGlobalGainUI(val: number) {
 	const globalGainSlider = document.getElementById(
 		"globalGainSlider",
@@ -55,16 +60,8 @@ export function updateGlobalGainUI(val: number) {
  * @param newGlobalGainState The new global gain value
  */
 export async function updateGlobalGain(newGlobalGainState: number) {
-	const device = getDevice();
 	updateGlobalGainUI(newGlobalGainState);
-	if (device)
-		await sendPacket(device, [
-			CMD.WRITE,
-			CMD.GAIN,
-			0x02,
-			0x00,
-			newGlobalGainState,
-		]);
+	await setDeviceGlobalGain(newGlobalGainState);
 }
 
 /**
@@ -73,10 +70,15 @@ export async function updateGlobalGain(newGlobalGainState: number) {
  */
 export async function setGlobalGain(e: Event) {
 	const globalGainEl = e.target as HTMLInputElement;
+	// We import setGlobalGainState from fn.ts to update state,
+	// but circular deps might be annoying.
+	// Assuming fn.ts handles state update via its own export or we call it here.
+	// Ideally, fn.ts should expose a setter that calls helpers.ts/dsp.ts.
+	// For now, let's assume the event listener in fn.ts/main.ts calls the state setter.
+
 	const newGlobalGainState = Number(globalGainEl.value);
-
-	setGlobalGainState(newGlobalGainState);
-
+	// Note: State update should happen in fn.ts setGlobalGain() which calls this.
+	// If this is the event handler directly:
 	await updateGlobalGain(newGlobalGainState);
 }
 
@@ -88,7 +90,10 @@ export function enableControls(enabled: boolean) {
 	const els = document.querySelectorAll(
 		"input, select, button.action, button.reset, button#btnExport",
 	);
-	els.forEach((el: any) => (el.disabled = !enabled));
+	for (const el of els) {
+		(el as HTMLInputElement | HTMLSelectElement | HTMLButtonElement).disabled =
+			!enabled;
+	}
 }
 
 /**
