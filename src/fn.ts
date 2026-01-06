@@ -1,5 +1,12 @@
-import { DEFAULT_FREQS, DEFAULT_LABELS } from "./constants.ts";
-import { readDeviceParams, setupListener, syncToDevice } from "./dsp.ts";
+import {
+	DEFAULT_FREQS,
+	DEFAULT_LABELS,
+	VID_COMTRUE,
+	VID_FIIO,
+	VID_SAVITECH,
+	VID_SAVITECH_OFFICIAL,
+} from "./constants.ts";
+import {readDeviceParams, setupListener, syncToDevice} from "./dsp.ts";
 import { enableControls, log, updateGlobalGainUI } from "./helpers.ts";
 import type { Band, EQ } from "./main.ts";
 
@@ -119,16 +126,14 @@ export function renderUI(eqState: EQ) {
  */
 export async function connectToDevice() {
 	try {
-		// Updated filters to support more Savitech devices (Fosi, etc.)
-		// and allow Comtrue devices (Moondrop/Tanchjim) to at least attempt connection
 		const devices = await navigator.hid.requestDevice({
 			filters: [
-				{ vendorId: 0x661 }, // JCally / Generic Savitech
-				{ vendorId: 0x262a }, // Savitech Official (Fosi, iBasso, Fiio KA series)
-				{ vendorId: 0x2fc6 }, // Comtrue CT7601 (Moondrop, Tanchjim - Protocol might differ!)
+				{ vendorId: VID_SAVITECH }, // JCally
+				{ vendorId: VID_SAVITECH_OFFICIAL }, // Fosi, iBasso
+				{ vendorId: VID_COMTRUE }, // Moondrop, Tanchjim
+				{ vendorId: VID_FIIO }, // FiiO
 			],
 		});
-
 		if (devices.length === 0) return;
 
 		device = devices[0];
@@ -138,22 +143,25 @@ export async function connectToDevice() {
 			`Connected to: ${device.productName} (VID: 0x${device.vendorId.toString(16).toUpperCase()})`,
 		);
 
+		// Setup UI state
 		const statusBadge = document.getElementById("statusBadge");
 		if (statusBadge) {
 			statusBadge.innerText = "ONLINE";
 			statusBadge.classList.add("connected");
 		}
 		const btnConnect = document.getElementById("btnConnect");
-		if (btnConnect) {
-			btnConnect.style.display = "none";
-		}
+		if (btnConnect) btnConnect.style.display = "none";
 
 		enableControls(true);
-		setupListener(device);
 
-		// Comtrue devices usually don't reply to Savitech commands,
-		// so this might timeout on Tanchjim/Moondrop, but it works for Fosi.
-		await readDeviceParams(device);
+		// For Savitech we can read. For others, we might start with a blank slate or implement reading later.
+		if (
+			device.vendorId === VID_SAVITECH ||
+			device.vendorId === VID_SAVITECH_OFFICIAL
+		) {
+            setupListener(device);
+			await readDeviceParams(device);
+		}
 	} catch (err) {
 		log(`Error: ${(err as Error).message}`);
 	}
