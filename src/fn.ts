@@ -1,7 +1,7 @@
-import { DEFAULT_FREQS, DEFAULT_LABELS, } from "./constants.ts";
-import type { Band, EQ } from "./main.ts";
+import { DEFAULT_FREQS, DEFAULT_LABELS } from "./constants.ts";
 import { readDeviceParams, setupListener, syncToDevice } from "./dsp.ts";
 import { enableControls, log, updateGlobalGainUI } from "./helpers.ts";
+import type { Band, EQ } from "./main.ts";
 
 /**
  * STATE
@@ -14,68 +14,72 @@ let eqState: EQ = defaultEqState();
  * INITIALIZATION
  */
 export function initState() {
-    renderUI(eqState);
+	renderUI(eqState);
 }
 
 // Questa funzione ora aggiorna sia lo stato che la UI
 export function setGlobalGain(gain: number) {
-    globalGainState = gain;
-    updateGlobalGainUI(gain);
+	globalGainState = gain;
+	updateGlobalGainUI(gain);
 }
 
 export function getDevice() {
-    return device;
+	return device;
 }
 
 export function getEqState() {
-    return eqState;
+	return eqState;
 }
 
 export function setEqState(eq: EQ) {
-    eqState = eq;
+	eqState = eq;
 }
 
-export function setEQ(index: number, key: keyof Band, value: number | boolean | string) {
-    // @ts-ignore - Dynamic key assignment
-    eqState[index][key] = value;
+export function setEQ(
+	index: number,
+	key: keyof Band,
+	value: number | boolean | string,
+) {
+	// @ts-expect-error - Dynamic key assignment
+	eqState[index][key] = value;
 }
 
 export function getGlobalGainState() {
-    return globalGainState;
+	return globalGainState;
 }
 
 export function setGlobalGainState(gainState: number) {
-    globalGainState = gainState;
+	globalGainState = gainState;
 }
 
 /**
  * DEFAULT EQ STATE
  */
 export function defaultEqState(): EQ {
-    return DEFAULT_FREQS.map((freq, i) => ({
-        index: i,
-        freq: freq,
-        gain: 0,
-        q: 0.75, // Default Q
-        type: "PK",
-        enabled: true,
-    })) as EQ;
+	return DEFAULT_FREQS.map((freq, i) => ({
+		index: i,
+		freq: freq,
+		gain: 0,
+		q: 0.75, // Default Q
+		type: "PK",
+		enabled: true,
+	})) as EQ;
 }
 /**
  * Render UI
  */
 export function renderUI(eqState: EQ) {
-    const container: HTMLElement | null = document.getElementById("eqContainer");
-    if (!container) {
-        console.error("EQ Container not found!");
-        return;
-    }
-    container.innerHTML = "";
+	const container: HTMLElement | null = document.getElementById("eqContainer");
+	if (!container) {
+		console.error("EQ Container not found!");
+		return;
+	}
+	container.innerHTML = "";
 
-    eqState.forEach((band, i) => {
-        const div = document.createElement("div");
-        div.className = `eq-strip ${band.enabled ? "" : "bypassed"}`;
-        div.innerHTML = `
+	eqState.forEach((band, i) => {
+		const div = document.createElement("div");
+		div.className = `eq-strip ${band.enabled ? "" : "bypassed"}`;
+		div.innerHTML = `
                 <h3>BAND ${i + 1}</h3>
                 <div class="freq-label">${DEFAULT_LABELS[i]}</div>
                 
@@ -106,8 +110,8 @@ export function renderUI(eqState: EQ) {
                     <option value="HSQ" ${band.type === "HSQ" ? "selected" : ""}>High Shelf</option>
                 </select>
             `;
-        container.appendChild(div);
-    });
+		container.appendChild(div);
+	});
 }
 
 /**
@@ -159,22 +163,27 @@ export async function connectToDevice() {
  * Reset to factory defaults
  */
 export async function resetToDefaults() {
-    if (!confirm("Reset all bands to Defaults (0dB, Q=1.0) and optimal frequencies?")) return;
+	if (
+		!confirm(
+			"Reset all bands to Defaults (0dB, Q=1.0) and optimal frequencies?",
+		)
+	)
+		return;
 
-    log("Resetting to factory defaults...");
+	log("Resetting to factory defaults...");
 
-    // FIX: Rimosso 'const', ora aggiorna la variabile globale del modulo!
-    eqState = defaultEqState();
+	// FIX: Rimosso 'const', ora aggiorna la variabile globale del modulo!
+	eqState = defaultEqState();
 
-    // Reset Global Gain State
-    setGlobalGain(0);
+	// Reset Global Gain State
+	setGlobalGain(0);
 
-    // Re-render UI
-    renderUI(eqState);
+	// Re-render UI
+	renderUI(eqState);
 
-    // Auto-sync to device using the updated state
-    await syncToDevice();
-    log("Defaults applied and synced.");
+	// Auto-sync to device using the updated state
+	await syncToDevice();
+	log("Defaults applied and synced.");
 }
 
 /**
@@ -187,23 +196,30 @@ export async function resetToDefaults() {
  * @param {string} key - Property to update
  * @param {number} value - New value
  */
-export function updateState(index: number, key: string, value: string | number | boolean) {
-    if (key === "freq" || key === "gain" || key === "q")
-        value = parseFloat(value as string);
-    else if (key === "enabled")
-        value = Boolean(value);
+export function updateState(
+	index: number,
+	key: string,
+	value: string | number | boolean,
+) {
+	if (key === "freq" || key === "gain" || key === "q")
+		value = parseFloat(value as string);
+	else if (key === "enabled") value = Boolean(value);
 
-    setEQ(index, key as keyof Band, value);
+	setEQ(index, key as keyof Band, value);
 
-    // Sync Slider <-> Number Input
-    if (key === "gain") {
-        // Set the current Gain Slider
-        const currentRange: HTMLInputElement | null = document.querySelector(`.eq-strip:nth-child(${index + 1}) input[type=range]`);
-        if (currentRange) currentRange.value = value.toString();
-        // Set the current Gain Number Input
-        const currentGain: HTMLInputElement | null = document.querySelector(`#num-gain-${index}`);
-        if (currentGain) currentGain.value = value.toString();
-    }
+	// Sync Slider <-> Number Input
+	if (key === "gain") {
+		// Set the current Gain Slider
+		const currentRange: HTMLInputElement | null = document.querySelector(
+			`.eq-strip:nth-child(${index + 1}) input[type=range]`,
+		);
+		if (currentRange) currentRange.value = value.toString();
+		// Set the current Gain Number Input
+		const currentGain: HTMLInputElement | null = document.querySelector(
+			`#num-gain-${index}`,
+		);
+		if (currentGain) currentGain.value = value.toString();
+	}
 }
 
 /**
@@ -212,20 +228,19 @@ export function updateState(index: number, key: string, value: string | number |
  * @param isEnabled
  */
 export function toggleBand(index: number, isEnabled: boolean) {
-    eqState[index].enabled = isEnabled;
+	eqState[index].enabled = isEnabled;
 
-    // Update visual style
-    const strip = document.querySelector(`.eq-strip:nth-child(${index + 1})`);
-    if (isEnabled) {
-        strip?.classList.remove("bypassed");
-    } else {
-        strip?.classList.add("bypassed");
-    }
+	// Update visual style
+	const strip = document.querySelector(`.eq-strip:nth-child(${index + 1})`);
+	if (isEnabled) {
+		strip?.classList.remove("bypassed");
+	} else {
+		strip?.classList.add("bypassed");
+	}
 
-    log(`Band ${index + 1} ${isEnabled ? "Enabled" : "Bypassed"}`);
+	log(`Band ${index + 1} ${isEnabled ? "Enabled" : "Bypassed"}`);
 }
 
 // Expose functions to global window object for inline event handlers
 (window as any).updateState = updateState;
 (window as any).toggleBand = toggleBand;
-
