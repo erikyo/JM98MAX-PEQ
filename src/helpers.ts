@@ -1,6 +1,4 @@
-import { CMD } from "./constants.ts";
-import { sendPacket } from "./dsp.ts";
-import { getDevice, setGlobalGainState } from "./fn.ts";
+import { setDeviceGlobalGain } from "./dsp.ts";
 import type { EQ } from "./main.ts";
 
 const c = document.getElementById("logConsole") as HTMLElement;
@@ -54,56 +52,42 @@ export function updateGlobalGainUI(val: number) {
  * Update global gain and send to device
  * @param newGlobalGainState The new global gain value
  */
+/**
+ * Update global gain and send to device using Protocol Dispatcher
+ */
 export async function updateGlobalGain(newGlobalGainState: number) {
-	const device = getDevice();
 	updateGlobalGainUI(newGlobalGainState);
-	if (device)
-		await sendPacket(device, [
-			CMD.WRITE,
-			CMD.GAIN,
-			0x02,
-			0x00,
-			newGlobalGainState,
-		]);
+	await setDeviceGlobalGain(newGlobalGainState);
 }
 
-/**
- * Set global gain and send to device
- * @param e The event object
- */
 export async function setGlobalGain(e: Event) {
 	const globalGainEl = e.target as HTMLInputElement;
+	// We import setGlobalGainState from fn.ts to update state,
+	// but circular deps might be annoying.
+	// Assuming fn.ts handles state update via its own export or we call it here.
+	// Ideally, fn.ts should expose a setter that calls helpers.ts/dsp.ts.
+	// For now, let's assume the event listener in fn.ts/main.ts calls the state setter.
+
 	const newGlobalGainState = Number(globalGainEl.value);
-
-	setGlobalGainState(newGlobalGainState);
-
+	// Note: State update should happen in fn.ts setGlobalGain() which calls this.
+	// If this is the event handler directly:
 	await updateGlobalGain(newGlobalGainState);
 }
 
-/**
- * Enable/Disable controls
- * @param enabled
- */
 export function enableControls(enabled: boolean) {
 	const els = document.querySelectorAll(
 		"input, select, button.action, button.reset, button#btnExport",
 	);
-	els.forEach((el: any) => (el.disabled = !enabled));
+	for (const el of els) {
+		(el as HTMLInputElement | HTMLSelectElement | HTMLButtonElement).disabled =
+			!enabled;
+	}
 }
 
-/**
- * Log message to the app console
- *
- * @param msg
- */
 export function log(msg: string) {
 	if (!c) return;
 	c.innerHTML += `<div>[${new Date().toLocaleTimeString()}] ${msg}</div>`;
 	c.scrollTop = c.scrollHeight;
 }
 
-/**
- * Delay for a specified number of milliseconds
- * @param ms | Number of milliseconds to delay
- */
 export const delay = (ms: number) => new Promise((r) => setTimeout(r, ms));
