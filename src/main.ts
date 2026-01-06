@@ -1,17 +1,17 @@
 import "./style.css";
-import {connectToDevice, initState, resetToDefaults} from "./fn.ts";
-import {exportProfile, importProfile} from "./importExport.ts";
-import {flashToFlash, syncToDevice} from "./dsp.ts";
-import {setGlobalGain} from "./helpers.ts";
+import { flashToFlash, syncToDevice } from "./dsp.ts";
+import { connectToDevice, initState, resetToDefaults } from "./fn.ts";
+import { setGlobalGain } from "./helpers.ts";
+import { exportProfile, importProfile } from "./importExport.ts";
 
 export type Band = {
-    index: number;
-    freq: number;
-    gain: number;
-    q: number;
-    type: string;
-    enabled: boolean;
-}
+	index: number;
+	freq: number;
+	gain: number;
+	q: number;
+	type: string;
+	enabled: boolean;
+};
 export type EQ = Band[];
 
 // Initialize immediately
@@ -32,7 +32,7 @@ btnReset?.addEventListener("click", async () => resetToDefaults());
 /**
  * SYNC LOGIC
  */
-const btnSync = document.getElementById("btnSync")
+const btnSync = document.getElementById("btnSync");
 btnSync!.addEventListener("click", syncToDevice);
 
 /**
